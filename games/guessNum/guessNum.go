@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
@@ -11,26 +12,22 @@ import (
 
 // Model
 type model struct {
-	cursor   int
-	choices  []string
-	selected map[int]struct{}
-
 	textInput textinput.Model
 	err       error
 	quitting  bool
+	choice    int
 }
 
 func initialModel() model {
 	ti := textinput.New()
-	ti.Placeholder = "50"
+	ti.Placeholder = "hello"
 	ti.SetVirtualCursor(false)
 	ti.Focus()
 	ti.CharLimit = 156
+	ti.SetWidth(30)
 
 	return model{
-		choices:    []string{"hello", "takuma", "toiyama", "aiueo", ";aldkjf"},
-		selected:   make(map[int]struct{}),
-		texitInput: ti,
+		textInput: ti,
 	}
 }
 
@@ -41,75 +38,61 @@ func (m model) Init() tea.Cmd {
 
 // Update
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
-		case "ctrl+c", "q":
+		case "ctrl+c":
 			return m, tea.Quit
-		case "up", "k":
-			if m.cursor > 0 {
-				m.cursor--
+		case "enter":
+			val := m.textInput.Value()
+
+			i, err := strconv.Atoi(val)
+			if err != nil {
+				return m, nil
 			}
-		case "down", "j":
-			if m.cursor < len(m.choices)-1 {
-				m.cursor++
-			}
-		case "enter", "space":
-			_, ok := m.selected[m.cursor]
-			if ok {
-				delete(m.selected, m.cursor)
-			} else {
-				m.selected[m.cursor] = struct{}{}
-			}
+
+			m.choice = i
+			return m, nil
 		}
 	}
 
-	return m, nil
+	m.textInput, cmd = m.textInput.Update(msg)
+	return m, cmd
 }
 
 // View
 func (m model) View() tea.View {
-	s := "Start Guessing my number!\n\n"
-
-	for i, choice := range m.choices {
-		cursor := " "
-		if m.cursor == i {
-			cursor = ">"
-		}
-
-		checked := " "
-		if _, ok := m.selected[i]; ok {
-			checked = "x"
-		}
-
-		s += fmt.Sprintf("%s [%s] %s\n", cursor, checked, choice)
-	}
+	s := "Start Guessing my number!\n\n You entered: ", m.choice
 
 	var c *tea.Cursor
-	if !m.textInputVirtualCursor() {
-		c = m.textInput.Cursor
-		c.Y += lipgloss.Height(m.headerView())
+	if !m.textInput.VirtualCursor() {
+		c = m.textInput.Cursor()
+		c.Y += 2
 	}
+	s += lipgloss.JoinVertical(lipgloss.Top, m.textInput.View())
 
-	s += lipgloss.JoinVertical(lipgloss.Top, m.headerView(), m.textInput.View(), m.footerVieq())
 	if m.quitting {
 		s += "\n"
 	}
-
-	s += "\nPress q to quit.\n"
-	s += "Hello World!\n"
+	s += "\nPress ctrl+c to quit.\n"
 
 	v := tea.NewView(s)
-	v.WindowTitle = "Grocery List"
-
+	v.Cursor = c
+	v.AltScreen = true
 	return v
 }
 
 func main() {
 	p := tea.NewProgram(initialModel())
-	if _, err := p.Run(); err != nil {
-		fmt.Printf("Alas, there's been an error: %v", err)
+	m, err := p.Run()
+	if err != nil {
+		fmt.Println("Oh no:", err)
 		os.Exit(1)
+	}
+
+	if m, ok := m.(model); ok && m.choice != 0 {
+		fmt.Printf("\n---\nYou typed ", m.choice)
 	}
 
 	// targetNum := (rand.IntN(100))
