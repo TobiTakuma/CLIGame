@@ -18,7 +18,6 @@ type model struct {
 	err          error
 	quitting     bool
 	stringChoice string
-	cursorY      int
 	anounce      string
 	attempts     int
 	min          int
